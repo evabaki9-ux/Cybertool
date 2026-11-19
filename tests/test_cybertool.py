@@ -86,6 +86,29 @@ class ScannerTests(unittest.TestCase):
                 server.shutdown()
                 server.server_close()
 
+    def test_localhost_with_ipv6_first(self):
+        port = free_port()
+        servers = start_demo_ports([port])
+        real_infos = socket.getaddrinfo("127.0.0.1", None, type=socket.SOCK_STREAM)
+        ipv4 = next(info for info in real_infos if info[0] == socket.AF_INET)
+        ipv6_first = (socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("::1", 0, 0, 0))
+        original_getaddrinfo = socket.getaddrinfo
+
+        def fake_getaddrinfo(host, service, *args, **kwargs):
+            if host == "localhost" and service is None:
+                return [ipv6_first, ipv4]
+            return original_getaddrinfo(host, service, *args, **kwargs)
+
+        try:
+            with patch("cybertool.scanner.socket.getaddrinfo", side_effect=fake_getaddrinfo):
+                report = scanner.scan_target("localhost", authorized=True, ports=[port], timeout=5)
+            self.assertEqual(report["port_count"], 1)
+            self.assertEqual(report["ports"][0]["host"], "127.0.0.1")
+        finally:
+            for server in servers:
+                server.shutdown()
+                server.server_close()
+
     def test_unresolvable_target(self):
         report = scanner.scan_target("no-such-host.invalid", authorized=True, ports=[80], timeout=5)
         self.assertEqual(report["port_count"], 0)

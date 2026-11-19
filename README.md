@@ -112,6 +112,22 @@ not "this host is definitely exploitable".
 Matches are heuristics based on what the scan reported. A match is **not** proof of
 vulnerability, and no match does not mean the service is safe. Verify manually.
 
+## No open ports locally?
+
+The vulnerable versions in this repo are **fake demo banners**, not real software installed on
+your machine. Start them before clicking the demo button:
+
+```bash
+python -m cybertool.demo_ports
+```
+
+Then scan `127.0.0.1`. Using `localhost` may resolve to IPv6 (`::1`) first on some systems;
+the scanner now tries every resolved address, but `127.0.0.1` is the most reliable target.
+
+If you scan a real authorized website, its services are probably patched, so the small local
+signature list may find nothing. Use **CVE lookup** for the detected versions, and remember a
+version match is only a hint — not proof of vulnerability.
+
 ## Tests
 
 ```bash

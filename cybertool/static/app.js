@@ -65,8 +65,10 @@ function renderPorts(scan) {
   const list = $("port-list");
   list.innerHTML = "";
   if (!scan.ports.length) {
-    list.innerHTML = '<p class="empty-note">No open ports found in the selected range.</p>';
-    $("ports-subtitle").textContent = "No ports to choose from. Try a different target or profile.";
+    list.innerHTML = '<p class="empty-note">No open ports found. If testing locally, start the demo services with ' +
+      '<code>python -m cybertool.demo_ports</code> and scan <code>127.0.0.1</code> instead of ' +
+      '<code>localhost</code>.</p>';
+    $("ports-subtitle").textContent = "No ports to choose from. Check the target, profile and local demo services.";
     $("vuln-btn").classList.add("hidden");
   } else {
     $("ports-subtitle").textContent =

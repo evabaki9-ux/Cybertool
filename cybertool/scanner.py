@@ -161,32 +161,40 @@ def scan_with_connect(target: str, ports: list[int], timeout: float) -> tuple[li
         infos = socket.getaddrinfo(target, None, type=socket.SOCK_STREAM)
     except socket.gaierror as exc:
         raise ValueError("Could not resolve target: %s" % exc) from exc
-    host = infos[0][4][0]
+    addresses = []
+    for info in infos:
+        address = info[4][0]
+        if address not in addresses:
+            addresses.append(address)
+    if not addresses:
+        raise ValueError("Could not resolve target to an address")
     connect_timeout = min(max(timeout / 10, 0.2), 1.5)
 
     def probe(port: int):
-        try:
-            with socket.create_connection((host, port), timeout=connect_timeout) as sock:
-                sock.settimeout(0.5)
-                if SERVICE_NAMES.get(port) in ("http", "https"):
+        for host in addresses:
+            try:
+                with socket.create_connection((host, port), timeout=connect_timeout) as sock:
+                    sock.settimeout(0.5)
+                    if SERVICE_NAMES.get(port) in ("http", "https"):
+                        try:
+                            sock.sendall(b"HEAD / HTTP/1.0\r\nHost: localhost\r\n\r\n")
+                        except OSError:
+                            pass
                     try:
-                        sock.sendall(b"HEAD / HTTP/1.0\r\nHost: localhost\r\n\r\n")
-                    except OSError:
-                        pass
-                try:
-                    banner = sock.recv(512).decode("utf-8", "replace").strip()
-                except (socket.timeout, OSError):
-                    banner = ""
-                info = {
-                    "port": port, "protocol": "tcp", "state": "open",
-                    "service": SERVICE_NAMES.get(port, "unknown"),
-                    "product": "", "version": "", "extrainfo": "",
-                    "method": "connect", "banner": banner[:200], "host": host,
-                }
-                info.update(classify_banner(port, banner))
-                return info
-        except (OSError, socket.timeout):
-            return None
+                        banner = sock.recv(512).decode("utf-8", "replace").strip()
+                    except (socket.timeout, OSError):
+                        banner = ""
+                    info = {
+                        "port": port, "protocol": "tcp", "state": "open",
+                        "service": SERVICE_NAMES.get(port, "unknown"),
+                        "product": "", "version": "", "extrainfo": "",
+                        "method": "connect", "banner": banner[:200], "host": host,
+                    }
+                    info.update(classify_banner(port, banner))
+                    return info
+            except (OSError, socket.timeout):
+                continue
+        return None
 
     with ThreadPoolExecutor(max_workers=64) as pool:
         results = list(pool.map(probe, ports))
