@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Cybertool — run a port scan, choose open ports, and check them against known service vulnerabilities.">
+  <title>Cybertool · Port Scan + Vulnerability Lookup</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Cybertool home">
+      <span class="brand-mark">CT</span>
+      <span class="brand-text"><strong>CYBERTOOL</strong><small>port &amp; service checks</small></span>
+    </a>
+    <div class="top-right">
+      <span class="pill" id="engine-pill"><span class="dot"></span> Detecting scanner…</span>
+      <span class="byline">by evabaki9-ux</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <p class="eyebrow">THREE STEPS · ONE TARGET</p>
+      <h1>Scan ports. Pick the open ones. <span>Check for known issues.</span></h1>
+      <p class="lede">Run an nmap-style TCP scan, choose which open ports to investigate, and match their
+        detected services and versions against a built-in list of known vulnerabilities and risky defaults.</p>
+      <div class="flow">
+        <span><b>01</b> Scan ports</span><i>→</i><span><b>02</b> Select ports</span><i>→</i><span><b>03</b> Review findings</span>
+      </div>
+    </section>
+
+    <section class="card step">
+      <div class="step-head">
+        <span class="step-num">01</span>
+        <div><h2>Run the port scan</h2><p>Enter a host you own or are authorized to test.</p></div>
+      </div>
+      <form id="scan-form" novalidate>
+        <label for="target">Target</label>
+        <div class="input-row">
+          <input id="target" type="text" spellcheck="false" autocomplete="off"
+                 placeholder="127.0.0.1  or  example.com  or  192.168.1.0/24">
+          <button class="btn primary" type="submit" id="scan-btn">Scan ports</button>
+        </div>
+        <div class="options">
+          <label class="check"><input type="checkbox" id="authorized">
+            <span>I am authorized to scan this target</span></label>
+          <label class="field">Ports
+            <select id="profile">
+              <option value="top">Common 100 ports</option>
+              <option value="full">All 65535 (needs nmap)</option>
+            </select>
+          </label>
+          <label class="field">Timeout
+            <select id="timeout">
+              <option value="15">15 seconds</option>
+              <option value="60" selected>60 seconds</option>
+              <option value="120">120 seconds</option>
+            </select>
+          </label>
+        </div>
+        <p class="engine-note" id="engine-note">Checking scan engine…</p>
+        <button class="link-btn" type="button" id="demo-btn">Use local demo host (127.0.0.1) →</button>
+      </form>
+    </section>
+
+    <div class="status hidden" id="scan-status" role="status" aria-live="polite"></div>
+
+    <section class="card step hidden" id="ports-step">
+      <div class="step-head">
+        <span class="step-num">02</span>
+        <div><h2>Open ports</h2><p id="ports-subtitle">Select the ports you want to check.</p></div>
+      </div>
+      <div class="port-toolbar">
+        <button class="btn ghost small" type="button" id="select-all">Select all</button>
+        <button class="btn ghost small" type="button" id="clear-all">Clear</button>
+        <span id="selection-count">0 selected</span>
+      </div>
+      <div class="port-list" id="port-list"></div>
+      <button class="btn primary wide hidden" type="button" id="vuln-btn">Check selected ports</button>
+    </section>
+
+    <div class="status hidden" id="vuln-status" role="status" aria-live="polite"></div>
+
+    <section class="card step hidden" id="vuln-step">
+      <div class="step-head">
+        <span class="step-num">03</span>
+        <div><h2>Possible vulnerabilities</h2><p>Matched from service name, product and version — nothing was exploited.</p></div>
+      </div>
+      <div class="vuln-summary" id="vuln-summary"></div>
+      <div id="findings"></div>
+      <div id="notes"></div>
+    </section>
+
+    <section class="card about">
+      <div class="card-head"><h2>Good to know</h2><span class="tag">read-only</span></div>
+      <ul class="about-list">
+        <li><b>nmap when available:</b> the app calls <code>nmap -sV --open -oX -</code> and reads its XML output. If nmap is missing, a TCP connect scan with banner grabbing is used instead.</li>
+        <li><b>Matches are hints:</b> a version-based signature is not proof that a host is vulnerable. Confirm each result manually before acting on it.</li>
+        <li><b>Scope:</b> only authorized systems. No credential guessing, payloads or exploitation is performed.</li>
+      </ul>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cybertool-port-scanner"
+version = "0.3.0"
+description = "Scan ports with nmap (or a connect fallback), select open ports and check local vulnerability signatures"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "evabaki9-ux" }]
+keywords = ["nmap", "ports", "security", "vulnerability", "scanner"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Topic :: Security",
+]
+
+[project.scripts]
+cybertool = "cybertool.__main__:main"
+cybertool-web = "cybertool.web:main"
+cybertool-demo = "cybertool.demo_ports:main"
+
+[tool.setuptools]
+packages = ["cybertool"]
+
+[tool.setuptools.package-data]
+cybertool = ["static/*"]
