@@ -10,7 +10,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from . import __version__, scanner, verify, vulns
+from . import __version__, playbook, scanner, verify, vulns
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 MAX_BODY_BYTES = 64 * 1024
@@ -80,7 +80,7 @@ class CybertoolHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlsplit(self.path).path
-        if path not in ("/api/scan", "/api/vulns", "/api/verify"):
+        if path not in ("/api/scan", "/api/vulns", "/api/verify", "/api/guide"):
             self._send_json({"error": "Not found"}, HTTPStatus.NOT_FOUND)
             return
         try:
@@ -97,6 +97,8 @@ class CybertoolHandler(BaseHTTPRequestHandler):
                     ports=payload.get("ports"),
                     timeout=float(payload.get("timeout", 60)),
                 )
+            elif path == "/api/guide":
+                result = playbook.guide_for(str(payload.get("finding_id", "")))
             elif path == "/api/vulns":
                 report = scanner.SCANS.get(str(payload.get("scan_id", "")))
                 if report is None:

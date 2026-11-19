@@ -151,3 +151,13 @@ code { font-family: var(--mono); color: var(--accent); }
 .verify-head strong { color: var(--text); }
 .verify-head span { font: 10px var(--mono); color: var(--muted); }
 .verify-result p { margin: 4px 0; }
+
+.guide-slot:empty { display: none; }
+.guide-panel { margin-top: 10px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: #0a1220; color: var(--muted); font-size: 12px; }
+.guide-head { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.guide-head strong { color: var(--text); }
+.guide-head span { font: 10px var(--mono); color: var(--accent); }
+.guide-panel h4 { margin: 12px 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--accent); }
+.guide-panel ol { margin: 0; padding-left: 18px; }
+.guide-panel li { margin-bottom: 4px; }
+.guide-panel .scope { margin-top: 12px; padding-top: 9px; border-top: 1px solid var(--border); color: var(--medium); font-size: 11px; }

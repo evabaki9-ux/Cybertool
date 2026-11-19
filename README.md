@@ -6,6 +6,7 @@ A simple three-step local tool:
 2. **Select** the open ports you care about.
 3. **Check** those services against a small offline list of known CVEs and risky defaults.
 4. **Verify safely** a selected finding with a read-only re-probe of the service banner.
+5. **Open the manual guide** for scoped, step-by-step verification and remediation notes.
 
 No exploitation, credential guessing or payloads. Scan only systems you own or have written permission to test.
 
@@ -65,6 +66,7 @@ All commands print JSON.
 - `POST /api/scan` — `{ "target": "127.0.0.1", "authorized": true, "profile": "top"|"full", "ports": [80], "timeout": 60 }`
 - `POST /api/vulns` — `{ "scan_id": "...", "ports": [21, 22] }`
 - `POST /api/verify` — `{ "scan_id": "...", "finding_id": "openssh-user-enumeration", "port": 22 }`
+- `POST /api/guide` — `{ "finding_id": "openssh-user-enumeration" }`
 
 `POST /api/scan` returns a `scan_id` plus the open ports. `POST /api/vulns` checks a subset of
 that scan against the local signatures and returns findings with severity, CVE/reference IDs,
@@ -78,6 +80,13 @@ Scans are kept in memory for the life of the server (last 20 only). The server b
 Examples: vsftpd 2.3.4 backdoor, old OpenSSH user enumeration, Apache 2.4.49/50 path traversal,
 Tomcat Ghostcat, SMB/MS17-010, RDP/BlueKeep, exposed Redis/MongoDB/Elasticsearch/Docker/Jenkins,
 Telnet/VNC/SNMP/FTP cleartext or default-configuration risks, and exposed Memcached.
+
+### Manual guide
+
+Every finding can open a guide with: what the signature means, safe verification steps,
+remediation steps, reference IDs and an authorization reminder. The guides intentionally
+contain **no** exploit payloads, credential-attack commands or instructions for executing
+commands on a target. They are meant to document an authorized engagement, not perform one.
 
 ### Safe verification
 
@@ -106,6 +115,7 @@ cybertool/
   scanner.py      nmap XML parsing + connect fallback
   vulns.py        offline signature list and matching
   verify.py       read-only banner re-probe for findings
+  playbook.py     manual verification and remediation guides
   web.py          web UI and JSON API
   __main__.py     CLI
   demo_ports.py   local fake banners for the demo

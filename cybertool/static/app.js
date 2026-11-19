@@ -117,8 +117,11 @@ function renderVulns(result) {
         '<p><strong>Fix: </strong>' + escapeHtml(item.remediation) + "</p>" +
         '<div class="references">' + references + "</div>" +
         '<div class="finding-actions"><button type="button" class="btn ghost small verify-btn" data-finding="' +
-        escapeHtml(item.id) + '" data-port="' + item.port + '">Verify safely</button></div>' +
-        '<div class="verify-slot" id="verify-slot-' + index + '"></div>';
+        escapeHtml(item.id) + '" data-port="' + item.port + '">Verify safely</button>' +
+        '<button type="button" class="btn ghost small guide-btn" data-finding="' +
+        escapeHtml(item.id) + '">Manual guide</button></div>' +
+        '<div class="verify-slot" id="verify-slot-' + index + '"></div>' +
+        '<div class="guide-slot" id="guide-slot-' + index + '"></div>';
       findings.appendChild(article);
     });
   }
@@ -250,9 +253,55 @@ async function verifyFinding(button) {
   }
 }
 
+function renderGuide(guide) {
+  const list = (items) => "<ol>" + items.map((item) => "<li>" + escapeHtml(item) + "</li>").join("") + "</ol>";
+  const refs = (guide.references || []).map((ref) =>
+    '<span class="reference">' + escapeHtml(ref) + "</span>").join("");
+  return '<div class="guide-panel">' +
+    '<div class="guide-head"><strong>Manual guide</strong><span>read-only · no payloads</span></div>' +
+    "<p>" + escapeHtml(guide.overview) + "</p>" +
+    "<h4>Safe verification</h4>" + list(guide.safe_steps) +
+    "<h4>How to fix</h4>" + list(guide.fix_steps) +
+    '<div class="references">' + refs + "</div>" +
+    '<p class="scope">' + escapeHtml(guide.scope_note) + "</p></div>";
+}
+
+async function openGuide(button) {
+  const slot = button.closest(".finding").querySelector(".guide-slot");
+  if (slot.innerHTML.trim()) {
+    slot.innerHTML = "";
+    button.textContent = "Manual guide";
+    return;
+  }
+  button.disabled = true;
+  button.textContent = "Loading…";
+  try {
+    const response = await fetch("/api/guide", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ finding_id: button.dataset.finding }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || "Could not load guide");
+    slot.innerHTML = renderGuide(data);
+    button.textContent = "Hide guide";
+  } catch (error) {
+    slot.innerHTML = '<div class="verify-result not_confirmed">' + escapeHtml(error.message) + "</div>";
+    toast(error.message);
+    button.textContent = "Manual guide";
+  } finally {
+    button.disabled = false;
+  }
+}
+
 $("findings").addEventListener("click", (event) => {
-  const button = event.target.closest(".verify-btn");
-  if (button) verifyFinding(button);
+  const guideButton = event.target.closest(".guide-btn");
+  if (guideButton) {
+    openGuide(guideButton);
+    return;
+  }
+  const verifyButton = event.target.closest(".verify-btn");
+  if (verifyButton) verifyFinding(verifyButton);
 });
 
 $("scan-form").addEventListener("submit", (event) => {

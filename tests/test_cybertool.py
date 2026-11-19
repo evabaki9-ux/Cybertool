@@ -6,7 +6,7 @@ import unittest
 from http.server import ThreadingHTTPServer
 from urllib.request import Request, urlopen
 
-from cybertool import scanner, verify, vulns
+from cybertool import playbook, scanner, verify, vulns
 from cybertool.demo_ports import start_demo_ports
 from cybertool.web import CybertoolHandler
 
@@ -159,6 +159,21 @@ class VerificationTests(unittest.TestCase):
             server.server_close()
 
 
+class GuideTests(unittest.TestCase):
+    def test_known_guide(self):
+        guide = playbook.guide_for("vsftpd-234-backdoor")
+        self.assertIn("CVE-2011-2523", guide["references"])
+        self.assertTrue(guide["safe_steps"])
+        self.assertTrue(guide["fix_steps"])
+        self.assertFalse(guide["contains_exploit_instructions"])
+        self.assertIn("permission", guide["scope_note"])
+
+    def test_unknown_guide_falls_back(self):
+        guide = playbook.guide_for("unknown-rule")
+        self.assertTrue(guide["safe_steps"])
+        self.assertEqual(guide["finding_id"], "unknown-rule")
+
+
 class WebTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -207,6 +222,12 @@ class WebTest(unittest.TestCase):
             result = json.load(response)
         self.assertEqual(result["checked_ports"][0]["port"], self.port)
         self.assertIn("findings", result)
+
+    def test_guide_endpoint(self):
+        with self._post("/api/guide", {"finding_id": "openssh-user-enumeration"}) as response:
+            guide = json.load(response)
+        self.assertIn("CVE-2016-6210", guide["references"])
+        self.assertFalse(guide["contains_exploit_instructions"])
 
     def test_verify_endpoint(self):
         with self._post("/api/scan", {
