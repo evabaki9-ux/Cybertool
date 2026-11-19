@@ -138,3 +138,16 @@ code { font-family: var(--mono); color: var(--accent); }
   .port-row { grid-template-columns: 20px 60px minmax(0,1fr); }
   .port-state { display: none; }
 }
+
+.finding-actions { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.btn.verify { padding: 6px 11px; font-size: 11px; }
+.verify-slot:empty { display: none; }
+.verify-result { margin-top: 10px; padding: 10px 12px; border-left: 3px solid var(--muted); border-radius: 8px; background: #070e1b; font-size: 12px; color: var(--muted); }
+.verify-result.confirmed { border-left-color: #5ce0a5; }
+.verify-result.not_confirmed { border-left-color: var(--high); }
+.verify-result.inconclusive { border-left-color: var(--medium); }
+.verify-result.loading { border-left-color: var(--accent); }
+.verify-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 5px; }
+.verify-head strong { color: var(--text); }
+.verify-head span { font: 10px var(--mono); color: var(--muted); }
+.verify-result p { margin: 4px 0; }

@@ -10,7 +10,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from . import __version__, scanner, vulns
+from . import __version__, scanner, verify, vulns
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 MAX_BODY_BYTES = 64 * 1024
@@ -80,7 +80,7 @@ class CybertoolHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlsplit(self.path).path
-        if path not in ("/api/scan", "/api/vulns"):
+        if path not in ("/api/scan", "/api/vulns", "/api/verify"):
             self._send_json({"error": "Not found"}, HTTPStatus.NOT_FOUND)
             return
         try:
@@ -97,7 +97,7 @@ class CybertoolHandler(BaseHTTPRequestHandler):
                     ports=payload.get("ports"),
                     timeout=float(payload.get("timeout", 60)),
                 )
-            else:
+            elif path == "/api/vulns":
                 report = scanner.SCANS.get(str(payload.get("scan_id", "")))
                 if report is None:
                     raise ValueError("Scan not found or expired; run a new scan")
@@ -111,6 +111,22 @@ class CybertoolHandler(BaseHTTPRequestHandler):
                 result = vulns.lookup(selected)
                 result["scan_id"] = payload["scan_id"]
                 result["target"] = report["target"]
+            else:
+                report = scanner.SCANS.get(str(payload.get("scan_id", "")))
+                if report is None:
+                    raise ValueError("Scan not found or expired; run a new scan")
+                finding_id = str(payload.get("finding_id", ""))
+                port_number = int(payload.get("port", 0))
+                port_info = next((item for item in report["ports"] if item["port"] == port_number), None)
+                if port_info is None:
+                    raise ValueError("That port is not part of this scan")
+                finding = verify.finding_for(port_info, finding_id)
+                if finding is None:
+                    raise ValueError("That finding is not part of this scan")
+                result = verify.verify_finding(
+                    finding, port_info, report["target"],
+                    timeout=float(payload.get("timeout", 5)),
+                )
         except (ValueError, TypeError, KeyError) as exc:
             self._send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             return

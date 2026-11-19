@@ -103,7 +103,7 @@ function renderVulns(result) {
   if (!result.findings.length) {
     findings.innerHTML = '<p class="empty-note">No known signature matched the selected ports.</p>';
   } else {
-    result.findings.forEach((item) => {
+    result.findings.forEach((item, index) => {
       const article = document.createElement("article");
       article.className = "finding " + item.severity;
       const references = (item.references || []).map((ref) =>
@@ -115,7 +115,10 @@ function renderVulns(result) {
         (item.cve ? " · " + escapeHtml(item.cve) : "") + " · " + escapeHtml(item.confidence) + "</p>" +
         "<p>" + escapeHtml(item.description) + "</p>" +
         '<p><strong>Fix: </strong>' + escapeHtml(item.remediation) + "</p>" +
-        '<div class="references">' + references + "</div>";
+        '<div class="references">' + references + "</div>" +
+        '<div class="finding-actions"><button type="button" class="btn ghost small verify-btn" data-finding="' +
+        escapeHtml(item.id) + '" data-port="' + item.port + '">Verify safely</button></div>' +
+        '<div class="verify-slot" id="verify-slot-' + index + '"></div>';
       findings.appendChild(article);
     });
   }
@@ -208,6 +211,49 @@ async function runVulnCheck() {
     button.textContent = original;
   }
 }
+
+function renderVerifyResult(result) {
+  const labels = { confirmed: "Confirmed", not_confirmed: "Not confirmed", inconclusive: "Inconclusive" };
+  return '<div class="verify-result ' + result.status + '">' +
+    '<div class="verify-head"><strong>' + escapeHtml(labels[result.status] || result.status) + "</strong>" +
+    "<span>" + escapeHtml(result.check || "read-only check") + "</span></div>" +
+    '<p class="meta">' + escapeHtml(result.evidence || "") + "</p>" +
+    "<p>" + escapeHtml(result.detail || "") + "</p></div>";
+}
+
+async function verifyFinding(button) {
+  const slot = button.closest(".finding").querySelector(".verify-slot");
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = "Verifying…";
+  slot.innerHTML = '<div class="verify-result loading">Re-probing the service banner…</div>';
+  try {
+    const response = await fetch("/api/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        scan_id: currentScan.scan_id,
+        finding_id: button.dataset.finding,
+        port: Number(button.dataset.port),
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || "Verification failed");
+    slot.innerHTML = renderVerifyResult(data);
+    toast("Verification complete");
+  } catch (error) {
+    slot.innerHTML = '<div class="verify-result not_confirmed">' + escapeHtml(error.message) + "</div>";
+    toast(error.message);
+  } finally {
+    button.disabled = false;
+    button.textContent = original;
+  }
+}
+
+$("findings").addEventListener("click", (event) => {
+  const button = event.target.closest(".verify-btn");
+  if (button) verifyFinding(button);
+});
 
 $("scan-form").addEventListener("submit", (event) => {
   event.preventDefault();

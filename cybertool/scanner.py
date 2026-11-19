@@ -108,6 +108,10 @@ def parse_nmap_xml(xml_text: str, target: str) -> tuple[list[dict], str]:
         })
     ports.sort(key=lambda item: item["port"])
     status = root.find(".//host/status")
+    address = root.find(".//host/address")
+    host = address.get("addr", "") if address is not None else ""
+    for item in ports:
+        item["host"] = host
     return ports, (status.get("state", "unknown") if status is not None else "unknown")
 
 
@@ -177,7 +181,7 @@ def scan_with_connect(target: str, ports: list[int], timeout: float) -> tuple[li
                     "port": port, "protocol": "tcp", "state": "open",
                     "service": SERVICE_NAMES.get(port, "unknown"),
                     "product": "", "version": "", "extrainfo": "",
-                    "method": "connect", "banner": banner[:200],
+                    "method": "connect", "banner": banner[:200], "host": host,
                 }
                 info.update(classify_banner(port, banner))
                 return info

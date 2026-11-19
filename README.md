@@ -5,6 +5,7 @@ A simple three-step local tool:
 1. **Scan** a host's open TCP ports (with `nmap` if installed, otherwise a built-in connect scan).
 2. **Select** the open ports you care about.
 3. **Check** those services against a small offline list of known CVEs and risky defaults.
+4. **Verify safely** a selected finding with a read-only re-probe of the service banner.
 
 No exploitation, credential guessing or payloads. Scan only systems you own or have written permission to test.
 
@@ -63,6 +64,7 @@ All commands print JSON.
 - `GET /api/status` — reports whether nmap is available
 - `POST /api/scan` — `{ "target": "127.0.0.1", "authorized": true, "profile": "top"|"full", "ports": [80], "timeout": 60 }`
 - `POST /api/vulns` — `{ "scan_id": "...", "ports": [21, 22] }`
+- `POST /api/verify` — `{ "scan_id": "...", "finding_id": "openssh-user-enumeration", "port": 22 }`
 
 `POST /api/scan` returns a `scan_id` plus the open ports. `POST /api/vulns` checks a subset of
 that scan against the local signatures and returns findings with severity, CVE/reference IDs,
@@ -76,6 +78,15 @@ Scans are kept in memory for the life of the server (last 20 only). The server b
 Examples: vsftpd 2.3.4 backdoor, old OpenSSH user enumeration, Apache 2.4.49/50 path traversal,
 Tomcat Ghostcat, SMB/MS17-010, RDP/BlueKeep, exposed Redis/MongoDB/Elasticsearch/Docker/Jenkins,
 Telnet/VNC/SNMP/FTP cleartext or default-configuration risks, and exposed Memcached.
+
+### Safe verification
+
+`POST /api/verify` and the **Verify safely** button reconnect to the selected port and read its
+service banner (sending only an HTTP `HEAD` for web ports). Version-based signatures are
+confirmed only when the live banner still matches; patch-level findings such as SMB/RDP stay
+**inconclusive** because they cannot be checked anonymously. No exploit payload, login attempt,
+file read or command is ever sent. A confirmation means "this version/signature is present",
+not "this host is definitely exploitable".
 
 Matches are heuristics based on what the scan reported. A match is **not** proof of
 vulnerability, and no match does not mean the service is safe. Verify manually.
@@ -94,6 +105,7 @@ Tests use local fake listeners and sample nmap XML; they make no external reques
 cybertool/
   scanner.py      nmap XML parsing + connect fallback
   vulns.py        offline signature list and matching
+  verify.py       read-only banner re-probe for findings
   web.py          web UI and JSON API
   __main__.py     CLI
   demo_ports.py   local fake banners for the demo

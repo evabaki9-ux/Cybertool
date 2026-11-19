@@ -1,11 +1,12 @@
 import json
 import socket
+import socketserver
 import threading
 import unittest
 from http.server import ThreadingHTTPServer
 from urllib.request import Request, urlopen
 
-from cybertool import scanner, vulns
+from cybertool import scanner, verify, vulns
 from cybertool.demo_ports import start_demo_ports
 from cybertool.web import CybertoolHandler
 
@@ -24,6 +25,26 @@ def free_port():
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         return sock.getsockname()[1]
+
+
+def banner_server(banner: bytes):
+    class Handler(socketserver.BaseRequestHandler):
+        def handle(self):
+            try:
+                self.request.settimeout(1.0)
+                self.request.sendall(banner)
+                try:
+                    self.request.recv(256)
+                except OSError:
+                    pass
+            except OSError:
+                pass
+
+    class Server(socketserver.ThreadingTCPServer):
+        allow_reuse_address = True
+        daemon_threads = True
+
+    return Server(("127.0.0.1", 0), Handler)
 
 
 class ScannerTests(unittest.TestCase):
@@ -92,11 +113,60 @@ class VulnerabilityTests(unittest.TestCase):
         self.assertEqual(result["counts"]["critical"], 1)
 
 
+class VerificationTests(unittest.TestCase):
+    def test_version_match_is_confirmed(self):
+        server = banner_server(b"SSH-2.0-OpenSSH_7.2p1\r\n")
+        port = server.server_address[1]
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            info = {"port": port, "protocol": "tcp", "service": "ssh",
+                    "product": "OpenSSH", "version": "7.2p1", "host": "127.0.0.1"}
+            finding = verify.finding_for(info, "openssh-user-enumeration")
+            result = verify.verify_finding(finding, info, "127.0.0.1", timeout=5)
+            self.assertEqual(result["status"], "confirmed")
+            self.assertTrue(result["safe"])
+        finally:
+            server.shutdown()
+            server.server_close()
+
+    def test_different_version_is_not_confirmed(self):
+        server = banner_server(b"SSH-2.0-OpenSSH_9.2p1\r\n")
+        port = server.server_address[1]
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            info = {"port": port, "protocol": "tcp", "service": "ssh",
+                    "product": "OpenSSH", "version": "7.2p1", "host": "127.0.0.1"}
+            finding = verify.finding_for(info, "openssh-user-enumeration")
+            result = verify.verify_finding(finding, info, "127.0.0.1", timeout=5)
+            self.assertEqual(result["status"], "not_confirmed")
+        finally:
+            server.shutdown()
+            server.server_close()
+
+    def test_patch_level_rule_is_inconclusive(self):
+        server = banner_server(b"\r\n")
+        port = server.server_address[1]
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            info = {"port": port, "protocol": "tcp", "service": "microsoft-ds",
+                    "product": "", "version": "", "host": "127.0.0.1"}
+            finding = verify.finding_for(info, "smb-ms17010")
+            result = verify.verify_finding(finding, info, "127.0.0.1", timeout=5)
+            self.assertEqual(result["status"], "inconclusive")
+            self.assertIn("authenticated", result["detail"])
+        finally:
+            server.shutdown()
+            server.server_close()
+
+
 class WebTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.port = free_port()
         cls.servers = start_demo_ports([cls.port])
+        cls.ssh_server = banner_server(b"SSH-2.0-OpenSSH_7.2p1\r\n")
+        cls.ssh_port = cls.ssh_server.server_address[1]
+        threading.Thread(target=cls.ssh_server.serve_forever, daemon=True).start()
         cls.server = ThreadingHTTPServer(("127.0.0.1", 0), CybertoolHandler)
         cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
         cls.thread.start()
@@ -110,6 +180,8 @@ class WebTest(unittest.TestCase):
         for server in cls.servers:
             server.shutdown()
             server.server_close()
+        cls.ssh_server.shutdown()
+        cls.ssh_server.server_close()
 
     def _post(self, path, payload):
         request = Request(self.base + path, data=json.dumps(payload).encode(),
@@ -135,6 +207,19 @@ class WebTest(unittest.TestCase):
             result = json.load(response)
         self.assertEqual(result["checked_ports"][0]["port"], self.port)
         self.assertIn("findings", result)
+
+    def test_verify_endpoint(self):
+        with self._post("/api/scan", {
+            "target": "127.0.0.1", "authorized": True, "ports": [self.ssh_port], "timeout": 5,
+        }) as response:
+            scan = json.load(response)
+        with self._post("/api/verify", {
+            "scan_id": scan["scan_id"], "finding_id": "openssh-user-enumeration",
+            "port": self.ssh_port,
+        }) as response:
+            result = json.load(response)
+        self.assertEqual(result["status"], "confirmed")
+        self.assertTrue(result["safe"])
 
     def test_authorization_required(self):
         with self.assertRaises(Exception) as context:
