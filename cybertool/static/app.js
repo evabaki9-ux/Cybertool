@@ -119,9 +119,13 @@ function renderVulns(result) {
         '<div class="finding-actions"><button type="button" class="btn ghost small verify-btn" data-finding="' +
         escapeHtml(item.id) + '" data-port="' + item.port + '">Verify safely</button>' +
         '<button type="button" class="btn ghost small guide-btn" data-finding="' +
-        escapeHtml(item.id) + '">Manual guide</button></div>' +
+        escapeHtml(item.id) + '">Manual guide</button>' +
+        '<button type="button" class="btn ghost small cve-btn" data-product="' +
+        escapeHtml(item.product || item.service || "") + '" data-version="' +
+        escapeHtml(item.version || "") + '">CVE lookup</button></div>' +
         '<div class="verify-slot" id="verify-slot-' + index + '"></div>' +
-        '<div class="guide-slot" id="guide-slot-' + index + '"></div>';
+        '<div class="guide-slot" id="guide-slot-' + index + '"></div>' +
+        '<div class="cve-slot"></div>';
       findings.appendChild(article);
     });
   }
@@ -294,7 +298,62 @@ async function openGuide(button) {
   }
 }
 
+function renderCve(data) {
+  if (!data.available) {
+    return '<div class="verify-result inconclusive"><strong>Online lookup unavailable</strong>' +
+      '<p class="meta">' + escapeHtml(data.error || "") + "</p>" +
+      "<p>" + escapeHtml(data.note || "") + "</p></div>";
+  }
+  if (!data.results.length) {
+    return '<div class="guide-panel"><strong>No NVD keyword matches</strong>' +
+      '<p>No public CVEs matched "' + escapeHtml(data.query) + '".</p></div>';
+  }
+  const items = data.results.map((item) =>
+    '<div class="cve-item"><div class="cve-head"><a href="' + escapeHtml(item.url) +
+    '" target="_blank" rel="noopener">' + escapeHtml(item.id) + "</a>" +
+    (item.score !== null && item.score !== undefined
+      ? '<span class="cve-score">CVSS ' + escapeHtml(item.score) + "</span>" : "") +
+    "</div><p>" + escapeHtml(item.description || "") + "</p></div>").join("");
+  return '<div class="cve-panel"><div class="guide-head"><strong>NVD results</strong>' +
+    "<span>" + escapeHtml(data.query) + "</span></div>" + items +
+    '<p class="scope">' + escapeHtml(data.note || "") + "</p></div>";
+}
+
+async function openCve(button) {
+  const slot = button.closest(".finding").querySelector(".cve-slot");
+  if (slot.innerHTML.trim()) {
+    slot.innerHTML = "";
+    button.textContent = "CVE lookup";
+    return;
+  }
+  button.disabled = true;
+  button.textContent = "Looking…";
+  slot.innerHTML = '<div class="verify-result loading">Querying NVD…</div>';
+  try {
+    const response = await fetch("/api/cve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ product: button.dataset.product, version: button.dataset.version }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || "Lookup failed");
+    slot.innerHTML = renderCve(data);
+    button.textContent = "Hide CVEs";
+  } catch (error) {
+    slot.innerHTML = '<div class="verify-result not_confirmed">' + escapeHtml(error.message) + "</div>";
+    toast(error.message);
+    button.textContent = "CVE lookup";
+  } finally {
+    button.disabled = false;
+  }
+}
+
 $("findings").addEventListener("click", (event) => {
+  const cveButton = event.target.closest(".cve-btn");
+  if (cveButton) {
+    openCve(cveButton);
+    return;
+  }
   const guideButton = event.target.closest(".guide-btn");
   if (guideButton) {
     openGuide(guideButton);

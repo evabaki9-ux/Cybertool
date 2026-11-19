@@ -5,8 +5,9 @@ A simple three-step local tool:
 1. **Scan** a host's open TCP ports (with `nmap` if installed, otherwise a built-in connect scan).
 2. **Select** the open ports you care about.
 3. **Check** those services against a small offline list of known CVEs and risky defaults.
-4. **Verify safely** a selected finding with a read-only re-probe of the service banner.
+4. **Verify safely** a selected finding with a read-only re-probe of the service version.
 5. **Open the manual guide** for scoped, step-by-step verification and remediation notes.
+6. **CVE lookup** queries public NVD records for the detected product/version.
 
 No exploitation, credential guessing or payloads. Scan only systems you own or have written permission to test.
 
@@ -67,6 +68,7 @@ All commands print JSON.
 - `POST /api/vulns` — `{ "scan_id": "...", "ports": [21, 22] }`
 - `POST /api/verify` — `{ "scan_id": "...", "finding_id": "openssh-user-enumeration", "port": 22 }`
 - `POST /api/guide` — `{ "finding_id": "openssh-user-enumeration" }`
+- `POST /api/cve` — `{ "product": "OpenSSH", "version": "7.2p1" }`
 
 `POST /api/scan` returns a `scan_id` plus the open ports. `POST /api/vulns` checks a subset of
 that scan against the local signatures and returns findings with severity, CVE/reference IDs,
@@ -88,10 +90,20 @@ remediation steps, reference IDs and an authorization reminder. The guides inten
 contain **no** exploit payloads, credential-attack commands or instructions for executing
 commands on a target. They are meant to document an authorized engagement, not perform one.
 
+### Online CVE lookup
+
+The **CVE lookup** button on each finding sends only the detected product and version to the
+public NVD API (`services.nvd.nist.gov`) and lists matching CVE candidates with CVSS scores and
+links. No target address, scan result or credential is sent. Keyword matches can be noisy —
+confirm applicability yourself. Set `NVD_API_KEY` in your environment to use an NVD API key.
+When outbound internet is unavailable, the UI shows a clean "unavailable" state and the local
+signature list still works.
+
 ### Safe verification
 
-`POST /api/verify` and the **Verify safely** button reconnect to the selected port and read its
-service banner (sending only an HTTP `HEAD` for web ports). Version-based signatures are
+`POST /api/verify` and the **Verify safely** button re-check the selected port. When nmap is
+installed it runs `nmap -sV` on that single port; otherwise it connects and reads the service
+banner (sending only an HTTP `HEAD` for web ports). Version-based signatures are
 confirmed only when the live banner still matches; patch-level findings such as SMB/RDP stay
 **inconclusive** because they cannot be checked anonymously. No exploit payload, login attempt,
 file read or command is ever sent. A confirmation means "this version/signature is present",
@@ -116,6 +128,7 @@ cybertool/
   vulns.py        offline signature list and matching
   verify.py       read-only banner re-probe for findings
   playbook.py     manual verification and remediation guides
+  cve_lookup.py   optional public NVD lookup by product/version
   web.py          web UI and JSON API
   __main__.py     CLI
   demo_ports.py   local fake banners for the demo

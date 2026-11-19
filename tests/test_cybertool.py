@@ -3,10 +3,12 @@ import socket
 import socketserver
 import threading
 import unittest
+from unittest.mock import patch
+from urllib.error import URLError
 from http.server import ThreadingHTTPServer
 from urllib.request import Request, urlopen
 
-from cybertool import playbook, scanner, verify, vulns
+from cybertool import cve_lookup, playbook, scanner, verify, vulns
 from cybertool.demo_ports import start_demo_ports
 from cybertool.web import CybertoolHandler
 
@@ -143,6 +145,18 @@ class VerificationTests(unittest.TestCase):
             server.shutdown()
             server.server_close()
 
+    def test_nmap_is_used_when_available(self):
+        info = {"port": 22, "protocol": "tcp", "service": "ssh",
+                "product": "OpenSSH", "version": "7.2p1", "host": "127.0.0.1"}
+        finding = verify.finding_for(info, "openssh-user-enumeration")
+        fake_probe = [{**info}]
+        with patch("cybertool.verify.scanner.nmap_available", return_value=True), \
+             patch("cybertool.verify.scanner.scan_with_nmap", return_value=(fake_probe, "up")) as mocked:
+            result = verify.verify_finding(finding, info, "127.0.0.1", timeout=5)
+        self.assertEqual(result["status"], "confirmed")
+        self.assertIn("nmap", result["check"])
+        self.assertTrue(mocked.called)
+
     def test_patch_level_rule_is_inconclusive(self):
         server = banner_server(b"\r\n")
         port = server.server_address[1]
@@ -157,6 +171,41 @@ class VerificationTests(unittest.TestCase):
         finally:
             server.shutdown()
             server.server_close()
+
+
+class CveLookupTests(unittest.TestCase):
+    def test_nvd_response_is_parsed(self):
+        payload = {"vulnerabilities": [{
+            "cve": {
+                "id": "CVE-2016-6210",
+                "descriptions": [{"lang": "en", "value": "User enumeration issue."}],
+                "metrics": {"cvssMetricV31": [{"cvssData": {"baseScore": 5.9, "baseSeverity": "MEDIUM"}}]},
+                "published": "2016-08-01T00:00Z",
+            }
+        }]}
+
+        class FakeResponse:
+            def read(self):
+                return json.dumps(payload).encode()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        with patch("cybertool.cve_lookup.urlopen", return_value=FakeResponse()):
+            result = cve_lookup.lookup("OpenSSH", "7.2p1")
+        self.assertTrue(result["available"])
+        self.assertEqual(result["results"][0]["id"], "CVE-2016-6210")
+        self.assertEqual(result["results"][0]["score"], 5.9)
+
+    def test_blocked_network_is_reported_cleanly(self):
+        with patch("cybertool.cve_lookup.urlopen", side_effect=URLError("blocked")):
+            result = cve_lookup.lookup("OpenSSH", "7.2p1")
+        self.assertFalse(result["available"])
+        self.assertEqual(result["results"], [])
+        self.assertIn("unavailable", result["note"].lower())
 
 
 class GuideTests(unittest.TestCase):
@@ -222,6 +271,13 @@ class WebTest(unittest.TestCase):
             result = json.load(response)
         self.assertEqual(result["checked_ports"][0]["port"], self.port)
         self.assertIn("findings", result)
+
+    def test_cve_endpoint(self):
+        with patch("cybertool.cve_lookup.urlopen", side_effect=URLError("blocked")):
+            with self._post("/api/cve", {"product": "OpenSSH", "version": "7.2p1"}) as response:
+                data = json.load(response)
+        self.assertFalse(data["available"])
+        self.assertEqual(data["results"], [])
 
     def test_guide_endpoint(self):
         with self._post("/api/guide", {"finding_id": "openssh-user-enumeration"}) as response:

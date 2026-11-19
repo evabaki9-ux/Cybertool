@@ -67,6 +67,7 @@ def verify_finding(finding: dict, port_info: dict, target: str, timeout: float =
     rule = next((item for item in vulns.RULES if item["id"] == rule_id), None)
     port = int(port_info.get("port", 0))
     host = port_info.get("host") or target
+    check_name = "TCP connect + banner read"
 
     def result(status: str, evidence: str, detail: str) -> dict:
         return {
@@ -76,7 +77,7 @@ def verify_finding(finding: dict, port_info: dict, target: str, timeout: float =
             "status": status,
             "evidence": evidence,
             "detail": detail,
-            "check": "TCP connect + banner read",
+            "check": check_name,
             "safe": True,
             "safety_note": SAFETY_NOTE,
             "verified_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -85,13 +86,23 @@ def verify_finding(finding: dict, port_info: dict, target: str, timeout: float =
     if rule is None or not port:
         return result("inconclusive", "No matching signature rule", "This finding has no verifier.")
 
-    try:
-        probes, _ = scanner.scan_with_connect(str(host), [port], timeout)
-    except (ValueError, TypeError) as exc:
-        return result("inconclusive", "Probe could not run", str(exc))
+    probes = []
+    using_nmap = scanner.nmap_available()
+    if using_nmap:
+        try:
+            probes, _ = scanner.scan_with_nmap(str(host), [port], max(timeout, 10.0))
+            check_name = "nmap -sV single-port version detection"
+        except (ValueError, TypeError):
+            using_nmap = False
+    if not using_nmap:
+        check_name = "TCP connect + banner read"
+        try:
+            probes, _ = scanner.scan_with_connect(str(host), [port], timeout)
+        except (ValueError, TypeError) as exc:
+            return result("inconclusive", "Probe could not run", str(exc))
     live = probes[0] if probes else None
     if live is None:
-        return result("not_confirmed", "TCP connect to %s:%d failed" % (host, port),
+        return result("not_confirmed", "Re-probe of %s:%d failed" % (host, port),
                       "The port is no longer reachable from this host, so the signature could not be confirmed.")
 
     evidence = "%s:%d → service=%s" % (host, port, live.get("service") or "unknown")
@@ -105,12 +116,12 @@ def verify_finding(finding: dict, port_info: dict, target: str, timeout: float =
         product_ok = spec["product"] in str(live.get("product") or "").lower()
         if product_ok and _version_matches(spec, live.get("version", "")):
             return result("confirmed", evidence,
-                          "Live banner matches the affected version signature. This confirms the version, not exploitability.")
+                          "Live version check matches the affected signature. This confirms the version, not exploitability.")
         if live.get("product") or live.get("version"):
             return result("not_confirmed", evidence,
-                          "The live banner reports a different product or version than the affected signature.")
+                          "The live version check reports a different product or version than the affected signature.")
         return result("inconclusive", evidence,
-                      "The service answered but did not reveal a version banner.")
+                      "The service answered but did not reveal a usable version.")
 
     if rule_id in PATCH_LEVEL_RULES:
         if _service_matches(rule, live) or _service_matches(rule, port_info):
